@@ -68,6 +68,8 @@ for column in X_num.columns:
         mean_value = X_num[column].mean()
         X_num = X_num[column].fillna(mean_value, inplace=True)
 
+X_num.fillna(X_num.mean(), inplace=True)
+
 # Fix missing data for categorical columns
 for column in X_cat.columns:
     if X_cat[column].isnull().any():
@@ -97,19 +99,44 @@ for i in range(len(X_cat_np[0])):
     label_encoders.append(LabelEncoder())
     X_cat_np[:, i] = label_encoders[i].fit_transform([row[i] for row in X_cat_np])
 
+errors = []
+
 regressor = DecisionTreeRegressor()
 regressor.fit(X_cat_np, y)
-y_pred = regressor.predict(X_cat_np)
+y_pred_reg = regressor.predict(X_cat_np)
+errors.append(mean_squared_error(y, y_pred_reg))
 
-mean_squared_error(y, y_pred)
+# depth
+regressor.get_depth()
 
-importances = regressor.feature_importances_
+# L1 regularization
+from sklearn.linear_model import Lasso
+X_num_np = X_num.to_numpy()
+lasso = Lasso(alpha=0.3)
+lasso.fit(X_num_np, y)
+y_pred_lasso = lasso.predict(X_num_np)
+errors.append(mean_squared_error(y, y_pred_lasso))
 
+# add the categorical data prediction to the numerical data
+X = np.concatenate((X_num_np, y_pred_reg.reshape(-1,1)), axis=1)
+
+lasso.fit(X, y)
+errors.append(mean_squared_error(y, lasso.predict(X)))
+
+# y_pred weighted mean
+y_pred_weighted = (y_pred_reg*0.05 + y_pred_lasso*0.95)
+
+errors.append(mean_squared_error(y, y_pred_weighted))
+
+X = np.concatenate((X_num_np,X_cat_np), axis=1)
+lasso.fit(X, y)
+errors.append(mean_squared_error(y, lasso.predict(X)))
+
+errors
 
 ###############################################################
 # Other data transformations 
 ###############################################################
-
 
 
 ###############################################################
