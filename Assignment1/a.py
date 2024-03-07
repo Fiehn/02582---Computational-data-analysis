@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-
 ###############################################################
 # Read the data
 ###############################################################
@@ -81,58 +80,104 @@ data = pd.concat([y, X_num, X_cat], axis=1)
 
 
 ###############################################################
-# Feature handling: categorical data 
+# Branch 1: Categorical data model encoding
 ###############################################################
-# https://www.saedsayad.com/decision_tree_reg.htm
-# We do decison tree regression for the categorical data
+
+# There are three branches in the categorical data model encoding branch
+# 1.1: One hot encoding (L2/L1 regularization)
+# 1.2: Random forest regression
+# 1.3: Boosting regression
+
+## Imports:
 from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeRegressor # it does one hot encoding in the background
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import mean_squared_error
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import AdaBoostRegressor
+from sklearn.linear_model import LassoCV
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.model_selection import KFold
+from sklearn.linear_model import RidgeCV
 
-# Make it numpy
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
+
+# Data processing for categorical data:
 X_cat_np = X_cat.to_numpy()
 
-# Label encode the categorical data, so that the labels are translated to usable data
+##############
+# 1.1: One hot encoding (L2/L1 regularization)
+##############
+# One hot encode the categorical data
+encoder = OneHotEncoder()
+X_cat_encoded = encoder.fit_transform(X_cat_np)
+
+lasso = LassoCV(cv=5)
+lasso.fit(X_cat_encoded, y)
+lasso.score(X_cat_encoded, y)
+mean_squared_error(y, lasso.predict(X_cat_encoded))
+
+ridge = RidgeCV(cv=5)
+ridge.fit(X_cat_encoded, y)
+ridge.score(X_cat_encoded, y)
+mean_squared_error(y, ridge.predict(X_cat_encoded))
+
+
+##############
+# 1.2: Random forest regression
+##############
+# Label encode the categorical data, so that the labels are translated to data for random forest and boosting
 label_encoders = []
 for i in range(len(X_cat_np[0])):
     label_encoders.append(LabelEncoder())
     X_cat_np[:, i] = label_encoders[i].fit_transform([row[i] for row in X_cat_np])
 
-errors = []
+# randomized search for random forest
+n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=10)]
+max_depth = [int(x) for x in np.linspace(10, 110, num=11)]
+max_depth.append(None)
+min_samples_split = [2, 5, 10]
+min_samples_leaf = [1, 2, 4]
+bootstrap = [True, False]
 
-regressor = DecisionTreeRegressor()
-regressor.fit(X_cat_np, y)
-y_pred_reg = regressor.predict(X_cat_np)
-errors.append(mean_squared_error(y, y_pred_reg))
+param_grid = {'n_estimators': n_estimators,
+                'max_depth': max_depth,
+                'min_samples_split': min_samples_split,
+                'min_samples_leaf': min_samples_leaf,
+                'bootstrap': bootstrap}
 
-# depth
-regressor.get_depth()
+rf = RandomForestRegressor()
+rf_random = RandomizedSearchCV(estimator=rf, param_distributions=param_grid, n_iter=100, cv=3, verbose=2, n_jobs=-1)
+rf_random.fit(X_cat_np, y)
+bparams = rf_random.best_params_
 
-# L1 regularization
-from sklearn.linear_model import Lasso
-X_num_np = X_num.to_numpy()
-lasso = Lasso(alpha=0.3)
-lasso.fit(X_num_np, y)
-y_pred_lasso = lasso.predict(X_num_np)
-errors.append(mean_squared_error(y, y_pred_lasso))
+rf2 = RandomForestRegressor(n_estimators=bparams['n_estimators'], min_samples_split=bparams['min_samples_split'], min_samples_leaf=bparams['min_samples_leaf'], max_depth=bparams['max_depth'], bootstrap=bparams['bootstrap'])
+rf2.fit(X_cat_np, y)
+y_pred = rf2.predict(X_cat_np)
+mean_squared_error(y, y_pred)
 
-# add the categorical data prediction to the numerical data
-X = np.concatenate((X_num_np, y_pred_reg.reshape(-1,1)), axis=1)
+##############
+# 1.3: Boosting regression
+##############
+# Randomized search for boosting regression
+n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=10)]
+learning_rate = np.linspace(0.01, 1, 50)
+loss = ['linear', 'square', 'exponential']
 
-lasso.fit(X, y)
-errors.append(mean_squared_error(y, lasso.predict(X)))
+param_grid = {'n_estimators': n_estimators,
+                'learning_rate': learning_rate,
+                'loss': loss}
 
-# y_pred weighted mean
-y_pred_weighted = (y_pred_reg*0.05 + y_pred_lasso*0.95)
+ada = AdaBoostRegressor()
+ada_random = RandomizedSearchCV(estimator=ada, param_distributions=param_grid, n_iter=100, cv=3, verbose=2, n_jobs=-1)
+ada_random.fit(X_cat_np, y)
+bparams = ada_random.best_params_
 
-errors.append(mean_squared_error(y, y_pred_weighted))
-
-X = np.concatenate((X_num_np,X_cat_np), axis=1)
-lasso.fit(X, y)
-errors.append(mean_squared_error(y, lasso.predict(X)))
-
-errors
+ada2 = AdaBoostRegressor(n_estimators=bparams['n_estimators'], learning_rate=bparams['learning_rate'], loss=bparams['loss'])
+ada2.fit(X_cat_np, y)
+y_pred = ada2.predict(X_cat_np)
+mean_squared_error(y, y_pred)
 
 ###############################################################
 # Other data transformations 
