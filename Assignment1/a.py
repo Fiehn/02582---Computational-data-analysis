@@ -160,12 +160,15 @@ mean_squared_error(y, y_pred)
 ##############
 # 1.3: Boosting regression
 ##############
+# https://www.researchgate.net/publication/2424244_Improving_Regressors_Using_Boosting_Techniques
 # Randomized search for boosting regression
 n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=10)]
 learning_rate = np.linspace(0.01, 1, 50)
 loss = ['linear', 'square', 'exponential']
+estimator = [LassoCV(), RidgeCV(), None]
 
-param_grid = {'n_estimators': n_estimators,
+param_grid = {'estimator' : estimator,
+                'n_estimators': n_estimators,
                 'learning_rate': learning_rate,
                 'loss': loss}
 
@@ -174,10 +177,20 @@ ada_random = RandomizedSearchCV(estimator=ada, param_distributions=param_grid, n
 ada_random.fit(X_cat_np, y)
 bparams = ada_random.best_params_
 
-ada2 = AdaBoostRegressor(n_estimators=bparams['n_estimators'], learning_rate=bparams['learning_rate'], loss=bparams['loss'])
-ada2.fit(X_cat_np, y)
-y_pred = ada2.predict(X_cat_np)
-mean_squared_error(y, y_pred)
+y_pred = ada_random.predict(X_cat_np)
+mean_squared_error(y, y_pred, squared=False)
+bparams
+
+
+###############################################################
+# Branch 2: Combine numerical and categorical prediction
+###############################################################
+
+# There are three branches in the combined numerical and categorical prediction branch
+# 2.1: Linear regression (L1/L2 regularization)
+# 2.2: Random forest regression
+# 2.3: Boosting regression
+
 
 ###############################################################
 # Other data transformations 
@@ -188,5 +201,8 @@ mean_squared_error(y, y_pred)
 # Prediction model: ??? 
 ###############################################################
 
+
+# Indsæt white noise, for at teste om variable importance på dem er høj
+# Fordi så skal det være en anden model, der kan håndtere det end RF
 
 
