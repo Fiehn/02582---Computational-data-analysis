@@ -18,16 +18,11 @@ y = raw_data['y']
 X_num = raw_data.loc[:, ' x_ 1':' x_95'].astype(float) 
 X_cat = raw_data.loc[:, ' C_ 1':' C_ 5'] 
 
-
-
 ###############################################################
 # Basic stats and distribution
 ###############################################################
-
-
 # Basic stats 
 raw_data.describe()
-
 
 # Set the size of the overall figure
 plt.figure(figsize=(20, 45))
@@ -42,11 +37,9 @@ plt.tight_layout()
 plt.show()
 
 
-
 # Correlation matrix
 correlation_matrix = X_num.corr()
 np.where((correlation_matrix > 0.65) & (correlation_matrix != 1))
-
 
 # Create box plots for numerical variables
 plt.figure(figsize=(15, 6))  # Adjust the figure size if needed
@@ -89,19 +82,18 @@ data = pd.concat([y, X_num, X_cat], axis=1)
 # 1.3: Boosting regression
 
 ## Imports:
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import AdaBoostRegressor
 from sklearn.linear_model import LassoCV
+from sklearn.linear_model import Lasso
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.model_selection import KFold
 from sklearn.linear_model import RidgeCV
-
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import GridSearchCV
+from sklearn.linear_model import Ridge
 from sklearn.model_selection import RandomizedSearchCV
+
+from sklearn.model_selection import GridSearchCV
 
 # Data processing for categorical data:
 X_cat_np = X_cat.to_numpy()
@@ -165,22 +157,33 @@ mean_squared_error(y, y_pred)
 n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=10)]
 learning_rate = np.linspace(0.01, 1, 50)
 loss = ['linear', 'square', 'exponential']
-estimator = [LassoCV(), RidgeCV(), None]
+estimator = [LassoCV(max_iter=5000),Lasso(max_iter=5000),Ridge(), RidgeCV(), None]
 
 param_grid = {'estimator' : estimator,
                 'n_estimators': n_estimators,
                 'learning_rate': learning_rate,
                 'loss': loss}
 
+# Label-encoded data
 ada = AdaBoostRegressor()
 ada_random = RandomizedSearchCV(estimator=ada, param_distributions=param_grid, n_iter=100, cv=3, verbose=2, n_jobs=-1)
 ada_random.fit(X_cat_np, y)
 bparams = ada_random.best_params_
 
 y_pred = ada_random.predict(X_cat_np)
-mean_squared_error(y, y_pred, squared=False)
-bparams
+mean_squared_error(y, y_pred, squared=False) # 54.189355753221015
 
+# {'n_estimators': 400, 'loss': 'linear', 'learning_rate': 0.8383673469387755, 'estimator': LassoCV(max_iter=5000)}
+
+## One-hot encoding
+ada = AdaBoostRegressor()
+ada_random = RandomizedSearchCV(estimator=ada, param_distributions=param_grid, n_iter=100, cv=3, verbose=2, n_jobs=-1)
+ada_random.fit(X_cat_encoded, y)
+bparams = ada_random.best_params_
+
+y_pred = ada_random.predict(X_cat_encoded)
+mean_squared_error(y, y_pred, squared=False) # 49.80523632875382
+# {'n_estimators': 2000, 'loss': 'linear', 'learning_rate': 0.5757142857142857, 'estimator': LassoCV(max_iter=5000)}
 
 ###############################################################
 # Branch 2: Combine numerical and categorical prediction
@@ -190,6 +193,8 @@ bparams
 # 2.1: Linear regression (L1/L2 regularization)
 # 2.2: Random forest regression
 # 2.3: Boosting regression
+
+
 
 
 ###############################################################
