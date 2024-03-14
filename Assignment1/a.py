@@ -18,8 +18,6 @@ y = raw_data['y']
 X_num = raw_data.loc[:, ' x_ 1':' x_95'].astype(float) 
 X_cat = raw_data.loc[:, ' C_ 1':' C_ 5'] 
 
-
-
 ###############################################################
 # Branch 1: Categorical data model encoding
 ###############################################################
@@ -31,7 +29,7 @@ X_cat = raw_data.loc[:, ' C_ 1':' C_ 5']
 
 ## Imports:
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import AdaBoostRegressor
 from sklearn.linear_model import LassoCV
@@ -40,11 +38,24 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.linear_model import RidgeCV
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import root_mean_squared_error
+from sklearn.model_selection import KFold
 
-from sklearn.model_selection import GridSearchCV
+def test_model(model, X, y, cv=5,verbose=False):
+    test_error = []
+    for i, (train_index, test_index) in enumerate(KFold(n_splits=cv).split(X)):
+        model.fit(X[train_index], y[train_index])
+        y_pred = model.predict(X[test_index])
+        test_error.append(root_mean_squared_error(y[test_index], y_pred))
+        if verbose:
+            print(f"Fold {i+1}: {root_mean_squared_error(y[test_index], y_pred)}")
+    print(f"Mean: {np.mean(test_error)}")
+    print(f"Std: {np.std(test_error)}")
+    return test_error
 
 # Data processing for categorical data:
 X_cat_np = X_cat.to_numpy()
+
 
 ##############
 # 1.1: One hot encoding (L2/L1 regularization)
@@ -53,16 +64,21 @@ X_cat_np = X_cat.to_numpy()
 encoder = OneHotEncoder()
 X_cat_encoded = encoder.fit_transform(X_cat_np)
 
-lasso = LassoCV(cv=5)
+lasso = LassoCV(cv=5, max_iter=5000, n_alphas=1000, tol=0.0001, selection='random')
 lasso.fit(X_cat_encoded, y)
-lasso.score(X_cat_encoded, y)
-mean_squared_error(y, lasso.predict(X_cat_encoded))
+mean_squared_error(y, lasso.predict(X_cat_encoded), squared=False)
+lasso_test = Lasso(alpha=lasso.alpha_)
+lasso.alpha_
+test_model(lasso_test, X_cat_encoded, y, cv=20)
 
-ridge = RidgeCV(cv=5)
+ridge = RidgeCV(cv=5, scoring='neg_root_mean_squared_error')
 ridge.fit(X_cat_encoded, y)
-ridge.score(X_cat_encoded, y)
-mean_squared_error(y, ridge.predict(X_cat_encoded))
+mean_squared_error(y, ridge.predict(X_cat_encoded), squared=False)
+ridge_test = Ridge(alpha=ridge.alpha_)
+ridge_test.fit(X_cat_encoded, y)
+y_pred = ridge_test.predict(X_cat_encoded)
 
+test_model(ridge_test, X_cat_encoded, y, cv=20)
 
 ##############
 # 1.2: Random forest regression
@@ -91,11 +107,14 @@ rf = RandomForestRegressor()
 rf_random = RandomizedSearchCV(estimator=rf, param_distributions=param_grid, n_iter=100, cv=3, verbose=2, n_jobs=-1)
 rf_random.fit(X_cat_np, y)
 bparams = rf_random.best_params_
+# {'n_estimators': 400, 'min_samples_split': 10, 'min_samples_leaf': 4, 'max_depth': 60, 'bootstrap': True}
 
 rf2 = RandomForestRegressor(n_estimators=bparams['n_estimators'], min_samples_split=bparams['min_samples_split'], min_samples_leaf=bparams['min_samples_leaf'], max_depth=bparams['max_depth'], bootstrap=bparams['bootstrap'])
 rf2.fit(X_cat_np, y)
 y_pred = rf2.predict(X_cat_np)
-mean_squared_error(y, y_pred)
+root_mean_squared_error(y, y_pred)
+
+test_model(rf2, X_cat_np, y, cv=20,verbose=False)
 
 ##############
 # 1.3: Boosting regression
@@ -117,9 +136,14 @@ ada = AdaBoostRegressor()
 ada_random = RandomizedSearchCV(estimator=ada, param_distributions=param_grid, n_iter=100, cv=3, verbose=2, n_jobs=-1)
 ada_random.fit(X_cat_np, y)
 bparams = ada_random.best_params_
+#{'n_estimators': 2000, 'loss': 'linear', 'learning_rate': 0.676734693877551, 'estimator': LassoCV(max_iter=5000)}
 
-y_pred = ada_random.predict(X_cat_np)
-root_mean_squared_error(y, y_pred) # 54.189355753221015
+ada_random_test = AdaBoostRegressor(n_estimators=2000, loss='linear', learning_rate=0.676734693877551, estimator=LassoCV(max_iter=5000))
+ada_random_test.fit(X_cat_np, y)
+y_pred = ada_random_test.predict(X_cat_np)
+mean_squared_error(y, y_pred,squared=False) # 53.61573929255613
+
+test_model(ada_random_test, X_cat_np, y, cv=20)
 
 # {'n_estimators': 400, 'loss': 'linear', 'learning_rate': 0.8383673469387755, 'estimator': LassoCV(max_iter=5000)}
 
@@ -130,12 +154,15 @@ ada_random.fit(X_cat_encoded, y)
 bparams = ada_random.best_params_
 
 y_pred = ada_random.predict(X_cat_encoded)
-root_mean_squared_error(y, y_pred) # 49.80523632875382
+mean_squared_error(y, y_pred,squared=False) # 49.80523632875382
 # {'n_estimators': 2000, 'loss': 'linear', 'learning_rate': 0.5757142857142857, 'estimator': LassoCV(max_iter=5000)}
 
 ada = AdaBoostRegressor(n_estimators=2000, loss='linear', learning_rate=0.5757142857142857, estimator=LassoCV(max_iter=5000))
 ada.fit(X_cat_encoded, y)
 y_pred = ada.predict(X_cat_encoded)
+
+test_model(ada, X_cat_encoded, y, cv=20)
+
 
 ###############################################################
 # Branch 2: Combine numerical and categorical prediction
@@ -221,8 +248,8 @@ for i, (train_index, test_index) in enumerate(kf.split(X,y)):
         Err_tst[i, j] = root_mean_squared_error(y_test, YhatTest) # Test error
 
 # Calculate the average RMSE over all CV folds for each alpha
-mean_err_tr = np.sqrt(np.mean(Err_tr, axis=0))  # Average training RMSE for each alpha
-mean_err_tst = np.sqrt(np.mean(Err_tst, axis=0))  # Average test RMSE for each alpha
+mean_err_tr = np.mean(Err_tr, axis=0)  # Average training RMSE for each alpha
+mean_err_tst = np.mean(Err_tst, axis=0)  # Average test RMSE for each alpha
 std_err_tst = np.std(Err_tst, axis=0) / np.sqrt(CV)  # Standard error of test RMSE for each alpha
 
 # Find the index of the smallest average test RMSE
@@ -252,11 +279,12 @@ plt.show()
 
 
 # make a prediction
-reg = Lasso(alpha=optimal_alpha)
+reg = Lasso(alpha=optimal_alpha, max_iter=5000)
 X_imputed = imp.fit_transform(X)
+normalized_X = normalize(X_imputed)[0]
 reg.fit(X_imputed, y)
 
-reg.coef_
+test_model(reg, normalized_X, y, cv=20)
 
 root_mean_squared_error(y,reg.predict(X_imputed))
 
@@ -274,7 +302,7 @@ print("Number of non-zero coefficients:", non_zero_coefficients)
 ###########
 
 # Randomized search for boosting regression
-n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=10)]
+n_estimators = [int(x) for x in np.linspace(start=20, stop=2000, num=10)]
 learning_rate = np.linspace(0.01, 1, 50)
 loss = ['linear', 'square', 'exponential']
 estimator = [LassoCV(max_iter=50000), RidgeCV(), None]
@@ -298,5 +326,32 @@ y_pred_branch_2 = ada_random.predict(X_imputed_scaled)
 root_mean_squared_error(y, y_pred_branch_2) # 8.782574806307585
 # {'n_estimators': 1200, 'loss': 'exponential', 'learning_rate': 0.030204081632653063, 'estimator': LassoCV(max_iter=50000)}
 
+###########
+# 2.3: Random forest regression
+###########
+n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=10)]
+max_depth = [int(x) for x in np.linspace(10, 110, num=11)]
+max_depth.append(None)
+min_samples_split = [2, 5, 10]
+min_samples_leaf = [1, 2, 4]
+bootstrap = [True, False]
 
+param_grid = {'n_estimators': n_estimators,
+                'max_depth': max_depth,
+                'min_samples_split': min_samples_split,
+                'min_samples_leaf': min_samples_leaf,
+                'bootstrap': bootstrap}
+
+rf = RandomForestRegressor()
+rf_random = RandomizedSearchCV(estimator=rf, param_distributions=param_grid, n_iter=100, cv=3, verbose=2, n_jobs=-1)
+rf_random.fit(X_imputed_scaled, y)
+bparams = rf_random.best_params_
+# {'n_estimators': 800, 'min_samples_split': 2, 'min_samples_leaf': 1, 'max_depth': 110, 'bootstrap': True}
+
+rf2 = RandomForestRegressor(n_estimators=bparams['n_estimators'], min_samples_split=bparams['min_samples_split'], min_samples_leaf=bparams['min_samples_leaf'], max_depth=bparams['max_depth'], bootstrap=bparams['bootstrap'])
+rf2.fit(X_imputed_scaled, y)
+
+test_model(rf2, X_imputed_scaled, y, cv=20)
+# Mean: 34.20807032743333
+# Std: 14.252093837656599
 
