@@ -265,6 +265,10 @@ plt.plot(y,'x', label='Actual')
 plt.legend()
 plt.show()
 
+# Count the number of non-zero coefficients
+non_zero_coefficients = np.count_nonzero(reg.coef_)
+print("Number of non-zero coefficients:", non_zero_coefficients)
+
 ###########
 # 2.2: AdaBoost regression
 ###########
@@ -290,8 +294,9 @@ ada_random = RandomizedSearchCV(estimator=ada, param_distributions=param_grid, n
 ada_random.fit(X_imputed_scaled, y)
 bparams = ada_random.best_params_
 
-y_pred_branch_2 = ada_random.predict(X_imputed)
-root_mean_squared_error(y, y_pred_branch_2) 
+y_pred_branch_2 = ada_random.predict(X_imputed_scaled)
+root_mean_squared_error(y, y_pred_branch_2) # 8.782574806307585
+# {'n_estimators': 1200, 'loss': 'exponential', 'learning_rate': 0.030204081632653063, 'estimator': LassoCV(max_iter=50000)}
 
 
 
